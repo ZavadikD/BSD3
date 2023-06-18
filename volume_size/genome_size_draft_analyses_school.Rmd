@@ -1,0 +1,111 @@
+---
+title: "Genome_size_references_Kinetos"
+author: "Zavadska Daryna"
+date: "2023-06-16"
+output: html_document
+---
+
+```{r}
+knitr::opts_knit$set(root.dir = "/home/dzavadska/Data/kDNA/volume_size")
+```
+
+
+# Getting datasets
+NCBI database stores some information about genome assemblies deposited there. 
+Go to NCBI website https://www.ncbi.nlm.nih.gov/ , choose genome database, go to "Browse by organism" tab, and apply the filters that will let you to retrieve info about the genomes of Protist taxa.
+
+![The filters to apply](/home/dzavadska/Data/kDNA/volume_size/markdown_images/Screenshot from 2023-06-16 16-54-43.png)
+
+# Opening files
+
+There are several ways to open the file in R, read.table is the most convenient option for us. 
+We can import the file we just got that contains genome size information, along with other things, and see the structure of it
+
+```{r}
+#gsize <- file("ncbi_genomes.csv", "r")
+#cat(file=gsize)
+
+gsize <- read.table("ncbi_genomes.csv", header = FALSE, sep=",")
+
+str(gsize)
+colnames(gsize)
+```
+
+
+
+```{r}
+colnames(gsize) <- c("species", "taxonomy", "mbp", "chromosomes", "organelles", "plasmids", "assemblies")
+colnames(gsize)
+```
+
+# Trophic modes data
+
+Now, let's get a datest on trophic modes - https://bdj.pensoft.net/article/download/suppl/5945722/ 
+and another one here, but we will abstain from using it by now - https://onlinelibrary.wiley.com/action/downloadSupplement?doi=10.1111%2Fjeu.12972&file=jeu12972-sup-0001-SupinfoS1.pdf 
+
+By the way, it is also possible to download files directly through R:
+
+```{r}
+download.file('https://bdj.pensoft.net/article/download/suppl/5945722/ ', destfile = "trophic_modes_1.csv", method = "wget")
+```
+
+Now, lets open the trophic mode file and see its structure. This file has a header and another separator, so change those arguments
+
+```{r}
+trmode1 <- read.table("trophic_modes_1.csv", header = TRUE, sep=";")
+str(trmode1)
+```
+
+
+# Finding intersection between two datasets!
+
+We are interested only in those species that have both the genome size data AND trophic mode data available. So we need to find which species fit these criteria. For this,
+we
+1) take the vector of species for which there is genome sequence.
+2) take the vector of species for which there is trophic mode.
+3) find which ones are shared
+There are two ways to do it, but the second is more convenient for our purpose
+
+```{r}
+# trmode1$ScientificName[which(trmode1$ScientificName %in% gsize$species == TRUE)]
+
+intersect(gsize$species, trmode1$ScientificName)
+
+intersection1 <- intersect(gsize$species, trmode1$ScientificName)
+```
+
+
+If we have a look at the species column of trophic mode dataset, we will see there are cases where after species name "var ..." is speciefied. This is a problem.
+
+```{r}
+
+grep(gsize$species[1], )
+
+
+length(gsize$species[which(as.character(gsize$species) %in% as.character(trmode1$ScientificName) == TRUE)])
+
+grep(as.character(c("Amphiprora lepidoptera")),  as.character(c("Amphiprora lepidoptera f  lepidoptera", "bullshit")))
+
+
+
+length(intersect(gsize$species, trmode1$ScientificName))
+```
+
+
+
+
+# Nicolas's trophic modes data
+
+https://zenodo.org/record/3768951 
+
+
+
+
+
+
+
+
+
+
+
+
