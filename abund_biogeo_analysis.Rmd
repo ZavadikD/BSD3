@@ -1,0 +1,180 @@
+---
+title: "Abundance_analysis_abundant_protists"
+author: "Zavadska Daryna"
+date: "2023-06-21"
+output: html_document
+---
+
+```{r}
+knitr::opts_knit$set(root.dir = "/home/dzavadska/Data/biogeo_abund")
+```
+
+
+So, the list of abundant protists and their sequences is here:
+https://docs.google.com/spreadsheets/d/1s7_ylFshOKtvWx-1DKZWrgGDcF_HiO0gwMUzNwOlmzw/edit?usp=sharing 
+
+```{r}
+abpr <- read.csv("the_most_abundant_Protists.csv")
+
+str(abpr)
+```
+
+We will need columns with BEAP_ID, Species_Assignation, Trimmed_18S_Sequence, Tara_V9_md5, Tara_V9_Match_. , Culture_ID
+
+```{r}
+abpr_work <- abpr[c(1:(nrow(abpr)-1)),c("BEAP_ID", "Culture_ID", "Species_Assignation", "Trimmed_18S_Sequence", "Tara_V9_md5", "Tara_V9_Match_.")]
+```
+
+
+TARA Oceans V9 metabarcoding abundance data can be downloaded here https://zenodo.org/record/7236051
+We will need https://zenodo.org/record/7236051/files/TARA-Oceans_18S-V9_Swarm-Mumu_table.tsv.gz?download=1 
+
+```{r}
+#download.file('https://zenodo.org/record/7236051/files/TARA-Oceans_18S-V9_Swarm-Mumu_table.tsv.gz?download=1', destfile = "TARA-Oceans_18S-V9_Swarm-Mumu_table.tsv.gz", method = "wget")
+```
+
+tsv.gz files are easy to read using fread function from data.table package
+```{r}
+library(data.table)
+v9data <- fread("TARA-Oceans_18S-V9_Swarm-Mumu_table.tsv.gz")
+
+str(v9data)
+```
+
+Environmental data from Tara Oceans samples is here: https://doi.pangaea.de/10.1594/PANGAEA.875577 
+Exactly here https://doi.pangaea.de/10.1594/PANGAEA.875577?format=textfile 
+```{r}
+#download.file('https://doi.pangaea.de/10.1594/PANGAEA.875577?format=textfile', destfile = "TARA_SAMPLES_CONTEXT_ENV-WATERCOLUMN.tab", method = "wget")
+
+context <- fread("TARA_CONTEXT.csv")
+```
+
+```{r}
+colnames(context)
+```
+
+# Estimating Relative abundances of selected barcode (method 1)
+
+Selected barcode
+```{r}
+md5sum <- abpr_work$Tara_V9_md5[9]
+```
+
+Abundances of the given barcode
+```{r}
+protist_ab <- as.numeric(v9data[which(v9data$amplicon==md5sum),6:ncol(v9data)])
+```
+
+Getting relative abundances of barcode of interest by summing up the total read abundance per sample and dividing abundances of the barcode by the total read abundance in each sample.
+Here we use function apply; we could have used the "for" loop as well, but this consumes more computational resource, and with our dataset size this is a big problem.
+```{r}
+v9data <- as.data.frame(v9data)[,c(1,6:ncol(v9data))]
+
+colsums <- apply( v9data[2:ncol(v9data)] , 2, sum)
+
+protist_rel_ab <- protist_ab/as.numeric(colsums)
+
+sum(protist_rel_ab)
+```
+# Investigating Tara context data
+
+The legend for sample context data can be found on the page from where we downloaded it: 
+
+
+
+
+
+
+
+
+##################################
+
+Getting relative abundances of everything - 0 replacement and log-ratio transformation. This script takes too much memory, it is computationally demanding. So, to perform this transformation, I created a separate script, run it on my local server 
+in the lab, and created a new file with log-transformed counts.
+```{r}
+###iqlr transformation function from propr package
+##
+ivar2index <- function(counts){
+  ct <- counts
+  if(any(counts == 0)){
+    message("Alert: Replacing 0s with next smallest value.")
+    zeros <- counts == 0
+    counts[zeros] <- min(counts[!zeros])
+  }
+  
+  counts.clr <- apply(log(counts), 1, function(x){ x - mean(x) })##
+  counts.var <- apply(counts.clr, 1, var)##
+  quart <- stats::quantile(counts.var) # use features with unextreme variance
+  use <- which(counts.var < quart[4] & counts.var > quart[2])
+  
+  
+  #return(use)
+  #here the original "ivar2index" function piece from propr package ends - this piece is intended to define a reference used for iqlr transformation (below)
+  
+  #here iqlr transformation begins
+  message("Alert: Saving log-ratio transformed counts to @logratio.")
+  logX <- log(counts)
+  logSet <- logX[, use, drop = FALSE]
+  ref <- rowMeans(logSet)
+  lr <- sweep(logX, 1, ref, "-")
+  
+  return(lr)
+}
+################################
+
+#abpr_work_iqlr <- ivar2index(v9data[,6:ncol(v9data)])
+```
+
+
+
+```{r}
+zeros <- v9data == 0
+v9data[zeros] <- 1
+
+zeros <- v9data[2:ncol(v9data)] == 0
+v9data[zeros] <- min(v9data[!zeros])
+
+min(v9data)
+
+str(zeros)
+
+v9data <- str(v9data[,c(1,6:ncol(v9data))])
+str(v9data)
+dataV9_t <- t(v9data)
+colnames(dataV9_t) <- dataV9_t[1,]
+
+
+  if(any(v9data == 0)){
+    message("Alert: Replacing 0s with next smallest value.")
+    zeros <- v9data == 0
+    v9data[zeros] <- min(v9data[!zeros])
+  }
+  
+  v9data.clr <- apply(log(v9data), 1, function(x){ x - mean(x) })##
+  v9data.var <- apply(v9data.clr, 1, var)##
+  quart <- stats::quantile(v9data.var) # use features with unextreme variance
+  use <- which(v9data.var < quart[4] & v9data.var > quart[2])
+  
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
