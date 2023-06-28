@@ -16,7 +16,7 @@ https://docs.google.com/spreadsheets/d/1s7_ylFshOKtvWx-1DKZWrgGDcF_HiO0gwMUzNwOl
 ```{r}
 abpr <- read.csv("the_most_abundant_Protists.csv")
 
-str(abpr)
+#str(abpr)
 ```
 
 We will need columns with BEAP_ID, Species_Assignation, Trimmed_18S_Sequence, Tara_V9_md5, Tara_V9_Match_. , Culture_ID
@@ -38,7 +38,7 @@ tsv.gz files are easy to read using fread function from data.table package
 library(data.table)
 v9data <- fread("TARA-Oceans_18S-V9_Swarm-Mumu_table.tsv.gz")
 
-str(v9data)
+#str(v9data)
 ```
 
 Environmental data from Tara Oceans samples is here: https://doi.pangaea.de/10.1594/PANGAEA.875577 
@@ -51,6 +51,7 @@ context <- fread("TARA_CONTEXT.csv")
 
 ```{r}
 colnames(context)
+head(context)
 ```
 
 # Estimating Relative abundances of selected barcode (method 1)
@@ -78,7 +79,106 @@ sum(protist_rel_ab)
 ```
 # Investigating Tara context data
 
-The legend for sample context data can be found on the page from where we downloaded it: 
+The aforementioned TARA context data has too many variables; in our analysis, we will stick to the parameters described in the analysis here https://www.nature.com/articles/s41396-018-0340-5#Sec2 ;  this data can be uploaded from here
+https://figshare.com/articles/dataset/Data_MixoBioGeo_Faure_et_al_2018/6715754?file=12249194 
+
+
+```{r}
+env_subs <- read.csv("Envi_context_Faure_et_al_2018.txt", sep = " ")
+```
+
+We could have used env_subs directly, but the metabarcoding data has abundance for "Sample.ID"-this data is present in "extended original" context dataset, but it is absent from the smaller dataset.
+Check if sample.mat is unique or duplicated, and do the same with Sample ID
+
+```{r}
+length(unique(context$`Sample ID (TARA_barcode#, registered at ...)`))
+length(unique(context$`Samp mat (TARA_station#_environmental-f...)`))
+```
+We just found out there is no actual way to find nonambigous correspondence between Sample.mat and Sample.ID. This is because same sample.mat can occur in >1 Sample.ID. This sucks. People get around either by passing a sacred vocabulary, which is kept by one of Tara bioinformaticians, to one another, the way we will do just now.
+
+Reading the vocabulary
+```{r}
+vocabulary <- read.csv("TAGs-18S-V4_NAME-PROJ-MAT-READ-CAB_nico.list", sep = "\t", header = FALSE)
+```
+
+
+Luckily, from my past work work I got a vocabulry a piece of code adopted to match sample.mat and sample.id
+
+```{r}
+    tmp <- context
+colnames(tmp) <- str_replace(str_squish(str_replace(colnames(context), "[(](.+)[)]", "")), " ", ".")
+    tmp <- tmp[,list(Sample.ID,Samp.mat)]
+    tmp[,Sample.ID:=sub("TARA_","",Sample.ID)]
+    tmp <- merge(vocabulary,tmp,by.x="V5",by.y="Sample.ID",all.x=T)
+    tmp <- tmp[,c("V5","Samp.mat")]
+    tmp <- unique(tmp)
+    tmp <- tmp[!duplicated("V5")]
+  head(tmp)
+```
+
+Now we can add the sample name with env_subs and continue with a clean, reasonable dataset on the environmental variables that can matter
+
+```{r}
+tmp$V5 <- paste0("TARA_", tmp$V5)
+mergeed_1 <- merge(tmp, env_subs)
+```
+
+
+Creating a data of protist relative abundance with corresponding station names; 
+putting the abundance of our barcode with the encironmental parameters in one table
+
+```{r}
+df_rel_ab <-data.frame("abundance" = protist_rel_ab, "V5" = colnames(v9data)[-1])
+for_rda <- merge(mergeed_1, df_rel_ab)
+```
+
+
+# Analysis - PCA 
+https://doi.org/10.3390/genes11010066 
+
+```{r}
+library(vegan)
+?pca
+
+
+rda.mixo = rda(abundance ~ ., for_rda)
+
+summary(rda.mixo)
+RsquareAdj(rda.mixo)
+# Adj Rsq = 35.38%, not too bad
+# We use the ordistep function to select variables through permutation tests :
+char2seed('Faure', set=T) # Ordistep is a function involving randomness so we set a seed for reproductability
+rda.step.both = ordistep(rda(tabmixo.hel~1,data=envi.rda), scope=formula(rda.mixo), direction="both", pstep=5000)
+formula(rda.step.both)
+# rda.mixo = rda(tabmixo.hel ~ Filter + Biogeographical.province + Depth.euph.zone +
+#     Longitude + Depth + Temperature + Ammonium.5m + Season +
+#     Sunshine.duration + acCDOM + Depth.Mixed.Layer + DepthBathy +
+#     Coast_Distance + Opt.beam.att.coef.660nm + PAR.TO + Depth.Max.O2 +
+#     Part.beam.att.coef + Si + CO3 + Calcite.saturation.state +
+#     Oxygen + Salinity + HCO3 + ChlorophyllA + Season.moment +
+#     PO4 + Okubo.Weiss + Lyapunov, data=envi.rda)
+
+rda.mixo=rda(formula=formula(rda.step.both), data=envi.rda)
+summary(rda.mixo)
+RsquareAdj(rda.mixo)
+#Adj Rsq is now down to 34.89%
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
