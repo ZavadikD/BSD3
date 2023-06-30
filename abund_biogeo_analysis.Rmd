@@ -105,6 +105,7 @@ vocabulary <- read.csv("TAGs-18S-V4_NAME-PROJ-MAT-READ-CAB_nico.list", sep = "\t
 Luckily, from my past work work I got a vocabulry a piece of code adopted to match sample.mat and sample.id
 
 ```{r}
+library(stringr)
     tmp <- context
 colnames(tmp) <- str_replace(str_squish(str_replace(colnames(context), "[(](.+)[)]", "")), " ", ".")
     tmp <- tmp[,list(Sample.ID,Samp.mat)]
@@ -132,37 +133,32 @@ df_rel_ab <-data.frame("abundance" = protist_rel_ab, "V5" = colnames(v9data)[-1]
 for_rda <- merge(mergeed_1, df_rel_ab)
 ```
 
+# Analysis - first glance
+
+
+
+
 
 # Analysis - PCA 
-https://doi.org/10.3390/genes11010066 
+https://www.nature.com/articles/s42003-022-03939-z#Sec10 - this article +/- reflects what we want to do.
+
+It says "Pearson’s correlations between the relative abundance of P. calceolata and all environmental parameters were calculated with the cor function the R package FactoMineR version 2.4 and the GGally package version 2.1.0. Principal component analysis (PCA) was performed with 9 parameters presenting significant Pearson’s correlations. We used a Generalized Additive Model (GAM) for its ability to fit non-linear and non-monotonic functions and for its low sensitivity to extreme values to model the relative abundance of P. calceolata as a function of iron concentration, temperature and PAR light87. This function is implemented in the mgcv R package version 1.8–33."
 
 ```{r}
-library(vegan)
-?pca
+cor(as.matrix(for_rda[,10:ncol(for_rda)]), as.matrix(for_rda[,ncol(for_rda)]), use = "pairwise.complete.obs")
+
+cor(as.matrix(for_rda[,10]), as.matrix(for_rda[,ncol(for_rda)]), use = "pairwise.complete.obs")
+library("corrplot")
+corrplot(cor.mat, type="upper", order="hclust", 
+         tl.col="black", tl.srt=45)
 
 
-rda.mixo = rda(abundance ~ ., for_rda)
+dim(as.matrix(for_rda[,ncol(for_rda)]))
+dim(for_rda[,10:ncol(for_rda)])
 
-summary(rda.mixo)
-RsquareAdj(rda.mixo)
-# Adj Rsq = 35.38%, not too bad
-# We use the ordistep function to select variables through permutation tests :
-char2seed('Faure', set=T) # Ordistep is a function involving randomness so we set a seed for reproductability
-rda.step.both = ordistep(rda(tabmixo.hel~1,data=envi.rda), scope=formula(rda.mixo), direction="both", pstep=5000)
-formula(rda.step.both)
-# rda.mixo = rda(tabmixo.hel ~ Filter + Biogeographical.province + Depth.euph.zone +
-#     Longitude + Depth + Temperature + Ammonium.5m + Season +
-#     Sunshine.duration + acCDOM + Depth.Mixed.Layer + DepthBathy +
-#     Coast_Distance + Opt.beam.att.coef.660nm + PAR.TO + Depth.Max.O2 +
-#     Part.beam.att.coef + Si + CO3 + Calcite.saturation.state +
-#     Oxygen + Salinity + HCO3 + ChlorophyllA + Season.moment +
-#     PO4 + Okubo.Weiss + Lyapunov, data=envi.rda)
+apply(as.matrix(for_rda[,10:ncol(for_rda)]), 2, cor(x,  for_rda[,ncol(for_rda)]))
 
-rda.mixo=rda(formula=formula(rda.step.both), data=envi.rda)
-summary(rda.mixo)
-RsquareAdj(rda.mixo)
-#Adj Rsq is now down to 34.89%
-
+?cor
 ```
 
 
@@ -228,40 +224,35 @@ ivar2index <- function(counts){
 
 
 ```{r}
-zeros <- v9data == 0
-v9data[zeros] <- 1
 
-zeros <- v9data[2:ncol(v9data)] == 0
-v9data[zeros] <- min(v9data[!zeros])
-
-min(v9data)
-
-str(zeros)
-
-v9data <- str(v9data[,c(1,6:ncol(v9data))])
-str(v9data)
-dataV9_t <- t(v9data)
-colnames(dataV9_t) <- dataV9_t[1,]
-
-
-  if(any(v9data == 0)){
-    message("Alert: Replacing 0s with next smallest value.")
-    zeros <- v9data == 0
-    v9data[zeros] <- min(v9data[!zeros])
-  }
+v9data_nochr <-v9data[2:ncol(v9data)]
+zeros <- v9data_nochr == 0
+v9data_nochr[zeros] <- min(v9data_nochr[!zeros])
   
-  v9data.clr <- apply(log(v9data), 1, function(x){ x - mean(x) })##
+  v9data.clr <- apply(log(v9data_nochr), 1, function(x){ x - mean(x) })##
   v9data.var <- apply(v9data.clr, 1, var)##
   quart <- stats::quantile(v9data.var) # use features with unextreme variance
   use <- which(v9data.var < quart[4] & v9data.var > quart[2])
   
-  
+  logX <- log(v9data_nochr)
+  logSet <- logX[use, , drop = FALSE]
+  ref <- colMeans(logSet)
+  lr <- sweep(logX, 1, ref, "-")
 ```
 
 
 
 
 
+
+# Analysis - corncob
+
+```{r}
+library(phyloseq)
+data(soil_phylum_small)
+soil <- soil_phylum_small
+otu_table(soil)[1:5,]
+```
 
 
 
