@@ -138,10 +138,6 @@ for_rda <- merge(mergeed_1, df_rel_ab)
 # Analysis - first glance
 
 
-
-
-
-# Analysis - PCA 
 https://www.nature.com/articles/s42003-022-03939-z#Sec10 - this article +/- reflects what we want to do.
 
 It says "Pearson’s correlations between the relative abundance of P. calceolata and all environmental parameters were calculated with the cor function the R package FactoMineR version 2.4 and the GGally package version 2.1.0. Principal component analysis (PCA) was performed with 9 parameters presenting significant Pearson’s correlations. We used a Generalized Additive Model (GAM) for its ability to fit non-linear and non-monotonic functions and for its low sensitivity to extreme values to model the relative abundance of P. calceolata as a function of iron concentration, temperature and PAR light87. This function is implemented in the mgcv R package version 1.8–33."
@@ -152,18 +148,84 @@ Problem 1 - data of different types (factor, integer, or float reflecting relati
 
 ```{r}
 head(for_rda)
+
+apply(for_rda[,10:ncol(for_rda)], 2, hist)
 ```
 the abovementioned article says:
-"In variables presented as proportions or ratios, e.g., humidity, this problem can be overcome with the arc-sin transformation. In those variables stretched over a large scale of values, e.g., illumination and passage cross section, this
-can be achieved by transformation in the logarithmic scale."
-we will use log-transformation to normalize all out data; we also need to replace 0s
+"In variables presented as proportions or ratios, e.g., humidity, this problem can be overcome with the arc-sin transformation. In those variables stretched over a large scale of values, e.g., illumination and passage cross section, this can be achieved by transformation in the logarithmic scale."
+
+Here ther is also a good description of PCA https://royalsocietypublishing.org/doi/10.1098/rsta.2015.0202#d1e242 , and they suggest, instead of doing fancy log-ratio or arcsin transformations, to do it cheap and fast:
+"To overcome this undesirable feature, it is common practice to begin by standardizing the variables. Each data value xij is both centred and divided by the standard deviation sj of the n observations of variable j. Thus, the initial data matrix X is replaced with the standardized data matrix Z, whose jth column is vector zj with the n standardized observations of variable j"
+
 ```{r}
 #log(for_rda[,10:ncol(for_rda)])
-min(for_rda[,10:ncol(for_rda)], na.rm = TRUE)
+#apply(for_rda[,10:ncol(for_rda)], 2, log)
+normalize <- function(x){
+  return((x - mean(x, na.rm = TRUE))/sd(x, na.rm = TRUE))
+}
 
-
+transf <- apply(for_rda[,12:ncol(for_rda)], 2, normalize)
+apply(transf, 2, hist)
 ```
 
+Alternatively, we can try scale() function
+
+```{r}
+#apply(scale(for_rda[,12:ncol(for_rda)]), 2, hist)
+#transf <- scale(for_rda[,12:ncol(for_rda)])
+```
+
+
+Now we can try to see if the distribution of out data is anywhere close to normal. We'll use K.-S. test, which is basically shapiro-wilks test but for bigger datasets. The critical value of this test for n>35 is ~1. 
+
+```{r}
+kstest <- apply(transf, 2, ks.test, y="pnorm")
+
+kstest[[10]]$p.value
+
+pv <- c()
+for (i in 1:ncol(transf)) {
+  pv <- c(pv, (kstest[[i]]$p.value))
+}
+pv
+
+stats <- c()
+for (i in 1:ncol(transf)) {
+  stats <- c(stats, (kstest[[i]]$statistic))
+}
+stats<1
+```
+
+To make a "positive control" to see which test results we get from the actual normally distributed dta, we can create an artificial normal distribution and test it.
+```{r}
+control <- pnorm(seq(-5, 5, by = 0.05) )
+
+ks.test(control, "pnorm")
+```
+
+
+Covariance matrix
+
+```{r}
+library(ggcorrplot)
+corr_matrix <- cor(transf, use = "pairwise.complete.obs")
+ggcorrplot(corr_matrix)
+
+library(GGally)
+ggpairs(data = as.data.frame(transf))
+```
+
+PCA
+```{r}
+data.pca <- princomp(corr_matrix)
+summary(data.pca)
+```
+
+Regression 
+```{r}
+fit_1 <- lm(abundance ~ ., data = as.data.frame(transf))
+summary(fit_1)
+```
 
 
 
@@ -247,6 +309,10 @@ ivar2index <- function(counts){
 #abpr_work_iqlr <- ivar2index(v9data[,6:ncol(v9data)])
 ```
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+```{r}
+dcast(small, amplicon~variable, value.var = "value")
+```
 
 
 ```{r}
@@ -268,7 +334,7 @@ v9data_nochr[zeros] <- min(v9data_nochr[!zeros])
 
 
 
-
+########################################
 
 
 # Analysis - corncob
