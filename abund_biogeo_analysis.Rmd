@@ -6,7 +6,8 @@ output: html_document
 ---
 
 ```{r}
-knitr::opts_knit$set(root.dir = "/home/dzavadska/Data/biogeo_abund")
+getwd()
+knitr::opts_knit$set(root.dir = "/home/zavadska/Documents/biology/BSD3-main/")
 ```
 
 
@@ -44,8 +45,8 @@ v9data <- fread("TARA-Oceans_18S-V9_Swarm-Mumu_table.tsv.gz")
 Environmental data from Tara Oceans samples is here: https://doi.pangaea.de/10.1594/PANGAEA.875577 
 Exactly here https://doi.pangaea.de/10.1594/PANGAEA.875577?format=textfile 
 ```{r}
-#download.file('https://doi.pangaea.de/10.1594/PANGAEA.875577?format=textfile', destfile = "TARA_SAMPLES_CONTEXT_ENV-WATERCOLUMN.tab", method = "wget")
-
+#download.file('https://doi.pangaea.de/10.1594/PANGAEA.875577?format=textfile', destfile = "TARA_CONTEXT_non-trunc.csv", method = "wget")
+#Note - for primary editing, it is important to use ONLY TAB as a separator!!
 context <- fread("TARA_CONTEXT.csv")
 ```
 
@@ -108,6 +109,7 @@ Luckily, from my past work work I got a vocabulry a piece of code adopted to mat
 library(stringr)
     tmp <- context
 colnames(tmp) <- str_replace(str_squish(str_replace(colnames(context), "[(](.+)[)]", "")), " ", ".")
+str_replace(str_squish(str_replace(colnames(context), "[(](.+)|(.+)[)]", "")), " ", ".")
     tmp <- tmp[,list(Sample.ID,Samp.mat)]
     tmp[,Sample.ID:=sub("TARA_","",Sample.ID)]
     tmp <- merge(vocabulary,tmp,by.x="V5",by.y="Sample.ID",all.x=T)
@@ -143,6 +145,30 @@ for_rda <- merge(mergeed_1, df_rel_ab)
 https://www.nature.com/articles/s42003-022-03939-z#Sec10 - this article +/- reflects what we want to do.
 
 It says "Pearson’s correlations between the relative abundance of P. calceolata and all environmental parameters were calculated with the cor function the R package FactoMineR version 2.4 and the GGally package version 2.1.0. Principal component analysis (PCA) was performed with 9 parameters presenting significant Pearson’s correlations. We used a Generalized Additive Model (GAM) for its ability to fit non-linear and non-monotonic functions and for its low sensitivity to extreme values to model the relative abundance of P. calceolata as a function of iron concentration, temperature and PAR light87. This function is implemented in the mgcv R package version 1.8–33."
+
+However, many questions arise in terms of exact stats to be applied, and the chapter available here https://drive.google.com/file/d/1gr_Z_SsmHpjjoJwkc3HQF-CEE9pgJoym/view?usp=drive_link nicely resolves the main concerns.
+
+Problem 1 - data of different types (factor, integer, or float reflecting relative values).
+
+```{r}
+head(for_rda)
+```
+the abovementioned article says:
+"In variables presented as proportions or ratios, e.g., humidity, this problem can be overcome with the arc-sin transformation. In those variables stretched over a large scale of values, e.g., illumination and passage cross section, this
+can be achieved by transformation in the logarithmic scale."
+we will use log-transformation to normalize all out data; we also need to replace 0s
+```{r}
+#log(for_rda[,10:ncol(for_rda)])
+min(for_rda[,10:ncol(for_rda)], na.rm = TRUE)
+
+
+```
+
+
+
+
+
+################################33
 
 ```{r}
 cor(as.matrix(for_rda[,10:ncol(for_rda)]), as.matrix(for_rda[,ncol(for_rda)]), use = "pairwise.complete.obs")
