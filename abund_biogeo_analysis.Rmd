@@ -7,7 +7,7 @@ output: html_document
 
 ```{r}
 getwd()
-knitr::opts_knit$set(root.dir = "/home/zavadska/Documents/biology/BSD3-main/")
+knitr::opts_knit$set(root.dir = "/home/dzavadska/Data/biogeo_abund")
 ```
 
 
@@ -75,7 +75,7 @@ v9data <- as.data.frame(v9data)[,c(1,6:ncol(v9data))]
 colsums <- apply( v9data[2:ncol(v9data)] , 2, sum)
 
 protist_rel_ab <- protist_ab/as.numeric(colsums)
-
+#fwrite(as.data.frame(protist_ab), "protist_rel_ab.csv")
 sum(protist_rel_ab)
 ```
 # Investigating Tara context data
@@ -109,7 +109,7 @@ Luckily, from my past work work I got a vocabulry a piece of code adopted to mat
 library(stringr)
     tmp <- context
 colnames(tmp) <- str_replace(str_squish(str_replace(colnames(context), "[(](.+)[)]", "")), " ", ".")
-str_replace(str_squish(str_replace(colnames(context), "[(](.+)|(.+)[)]", "")), " ", ".")
+#str_replace(str_squish(str_replace(colnames(context), "[(](.+)|(.+)[)]", "")), " ", ".")
     tmp <- tmp[,list(Sample.ID,Samp.mat)]
     tmp[,Sample.ID:=sub("TARA_","",Sample.ID)]
     tmp <- merge(vocabulary,tmp,by.x="V5",by.y="Sample.ID",all.x=T)
@@ -117,12 +117,17 @@ str_replace(str_squish(str_replace(colnames(context), "[(](.+)|(.+)[)]", "")), "
     tmp <- unique(tmp)
     tmp <- tmp[!duplicated("V5")]
   head(tmp)
+ # unique(tmp$V5)
+ # unique(tmp$Samp.mat)
 ```
 
 Now we can add the sample name with env_subs and continue with a clean, reasonable dataset on the environmental variables that can matter
 
 ```{r}
 tmp$V5 <- paste0("TARA_", tmp$V5)
+trunc_names <- as.data.frame(str_split(tmp$Samp.mat,"_", simplify = TRUE)[,1:3])
+tmp$names <- paste0(trunc_names$V1, "_", trunc_names$V2, "_", trunc_names$V3)
+env_subs$names <- rownames(env_subs)
 mergeed_1 <- merge(tmp, env_subs)
 ```
 
@@ -149,7 +154,7 @@ Problem 1 - data of different types (factor, integer, or float reflecting relati
 ```{r}
 head(for_rda)
 
-apply(for_rda[,10:ncol(for_rda)], 2, hist)
+apply(for_rda[,14:ncol(for_rda)], 2, hist)
 ```
 the abovementioned article says:
 "In variables presented as proportions or ratios, e.g., humidity, this problem can be overcome with the arc-sin transformation. In those variables stretched over a large scale of values, e.g., illumination and passage cross section, this can be achieved by transformation in the logarithmic scale."
@@ -164,7 +169,7 @@ normalize <- function(x){
   return((x - mean(x, na.rm = TRUE))/sd(x, na.rm = TRUE))
 }
 
-transf <- apply(for_rda[,12:ncol(for_rda)], 2, normalize)
+transf <- apply(for_rda[,14:ncol(for_rda)], 2, normalize)
 apply(transf, 2, hist)
 ```
 
@@ -193,7 +198,7 @@ stats <- c()
 for (i in 1:ncol(transf)) {
   stats <- c(stats, (kstest[[i]]$statistic))
 }
-stats<1
+stats
 ```
 
 To make a "positive control" to see which test results we get from the actual normally distributed dta, we can create an artificial normal distribution and test it.
@@ -208,15 +213,35 @@ Covariance matrix
 
 ```{r}
 library(ggcorrplot)
-corr_matrix <- cor(transf, use = "pairwise.complete.obs")
+corr_matrix <- cor(na.exclude(for_rda[,12:ncol(for_rda)]), use = "pairwise.complete.obs")
 ggcorrplot(corr_matrix)
 
-library(GGally)
-ggpairs(data = as.data.frame(transf))
+corr_matrix[,"abundance"][order(corr_matrix[,"abundance"], decreasing = TRUE)]
+#library(GGally)
+#ggpairs(data = as.data.frame(transf))
 ```
 
 PCA
 ```{r}
+library(pls)
+transf_df <- as.data.frame(transf)
+na.exclude(transf_df)
+fit1 <- lm(abundance ~ ., data= na.exclude(transf_df))
+summary(fit1)
+?lm
+
+
+transf_df_pca <- transf_df[which(for_rda$abundance != 0),]
+
+?pcr
+fit <- pcr( abundance ~ ., data = as.data.frame(transf_df_pca), scale = FALSE, validation = "CV" )
+fit <- pcr( abundance ~ ., data = as.data.frame(for_rda[,12:ncol(for_rda)]), scale = FALSE, validation = "CV" )
+summary(fit)
+validationplot(fit, val.type = 'MSEP' )
+min.pcr = which.min( MSEP( fit )$val[1,1, ] ) - 1
+coef(fit, ncomp = min.pcr)
+
+
 data.pca <- princomp(corr_matrix)
 summary(data.pca)
 ```
@@ -347,9 +372,25 @@ otu_table(soil)[1:5,]
 ```
 
 
+```{r}
+otu_mat<- as.data.frame(for_rda[,c(1,ncol(for_rda))])
+
+tax_mat<- read_excel("../data/CARBOM data.xlsx", sheet = "Taxonomy table")
+samples_df <- as.matrix(for_rda[,12:(ncol(for_rda)-1)])
+  otu_mat <- otu_mat %>% 
+    tibble::column_to_rownames("V5")
+
+OTU = otu_table(otu_mat, taxa_are_rows = FALSE)
+
+```
 
 
 
+```{r}
+library(corncob)
+
+bbdml()
+```
 
 
 
